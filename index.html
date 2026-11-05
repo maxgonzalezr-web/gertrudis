@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#172554">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Gertrudis · Asistente personal</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#172033;background:#f4f6fb}
+*{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{background:#172554;color:white;padding:22px 18px 18px}
+header h1{margin:0;font-size:24px}header p{margin:5px 0 0;color:#c7d2fe;font-size:13px}
+main{max-width:760px;margin:auto;padding:16px}
+.card{background:white;border:1px solid #e4e8f0;border-radius:16px;padding:15px;margin:12px 0;box-shadow:0 2px 8px #1725540a}
+h2{font-size:17px;margin:0 0 12px}.muted{color:#64748b;font-size:13px}
+button,input,select,textarea{font:inherit}
+button{border:0;border-radius:11px;padding:11px 14px;background:#1d4ed8;color:white;font-weight:650;cursor:pointer}
+button.secondary{background:#e8eefc;color:#1e3a8a}button.ghost{background:transparent;color:#1d4ed8;padding:6px}
+button.danger{background:#fee2e2;color:#991b1b}
+input,select,textarea{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;background:white;margin:5px 0 10px;color:#172033}
+textarea{min-height:65px;resize:vertical}.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+.voice{display:flex;gap:12px;align-items:center}.mic{width:58px;height:58px;border-radius:50%;font-size:25px;flex:none;background:#dc2626}
+#voiceStatus{font-size:13px;color:#475569}
+.task{border:1px solid #e5eaf2;border-radius:12px;padding:12px;margin:9px 0}
+.tasktop{display:flex;gap:8px;align-items:flex-start}.tasktop strong{flex:1}
+.pill{font-size:11px;padding:4px 8px;border-radius:20px;background:#eef2ff;color:#3730a3;white-space:nowrap}
+.high{background:#fee2e2;color:#991b1b}.medium{background:#fef3c7;color:#92400e}.low{background:#dcfce7;color:#166534}
+.task small{display:block;color:#64748b;margin-top:5px}
+.task-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.task-actions button{font-size:12px;padding:7px 9px}
+.rule{background:#f8fafc;border-radius:10px;padding:10px;margin:7px 0;font-size:14px}
+.hidden{display:none}.tabs{display:flex;gap:7px;margin:12px 0}.tabs button{flex:1}
+footer{text-align:center;color:#94a3b8;font-size:11px;padding:20px}
+.notice{padding:10px;border-radius:10px;background:#fffbeb;color:#854d0e;font-size:12px;margin:8px 0}
+@media(min-width:650px){main{padding:22px}.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+</style>
+</head>
+<body>
+<header><h1>Gertrudis</h1><p>Tu asistente personal · tareas, recordatorios y memoria</p></header>
+<main>
+<section class="card">
+ <div class="voice">
+  <button class="mic" id="mic" aria-label="Hablar">🎙</button>
+  <div><strong>Habla con tu asistente</strong><div id="voiceStatus">Pulsa el micrófono y da una instrucción.</div></div>
+ </div>
+ <div class="muted" style="margin-top:10px">Ejemplos: “Agrega enviar propuesta para el viernes, prioridad alta” · “Recuerda que Juan vive en España y las reuniones son por la mañana”.</div>
+ <div id="heard" class="muted"></div>
+</section>
+
+<section class="card">
+ <h2>Nueva tarea</h2>
+ <label class="muted" for="taskTitle">¿Qué tienes que hacer?</label>
+ <input id="taskTitle" placeholder="Ej. Enviar propuesta a TechnoServe">
+ <div class="cols">
+  <div><label class="muted" for="taskDue">Fecha límite</label><input id="taskDue" type="date"></div>
+  <div><label class="muted" for="taskPriority">Prioridad</label><select id="taskPriority"><option value="high">Alta</option><option value="medium" selected>Media</option><option value="low">Baja</option></select></div>
+ </div>
+ <label class="muted" for="taskNote">Comentario (opcional)</label><textarea id="taskNote" placeholder="Contexto, detalles o avances..."></textarea>
+ <button id="addTask">Agregar tarea</button>
+</section>
+
+<section class="card">
+ <div class="row"><h2 style="margin:0">Mis tareas</h2><span class="muted" id="taskCount" style="text-align:right"></span></div>
+ <div class="tabs"><button class="secondary" data-filter="pending">Pendientes</button><button class="secondary" data-filter="done">Completadas</button><button class="secondary" data-filter="all">Todas</button></div>
+ <div class="row" style="margin-bottom:10px"><span class="muted">Presentación</span><select id="viewMode" style="max-width:180px;margin:0"><option value="flat">Hoja plana</option><option value="cards">Tarjetas</option></select></div>
+ <div id="tasks"></div>
+</section>
+
+<section class="card">
+ <h2>Memoria de largo plazo</h2>
+ <p class="muted">Solo se guarda información permanente cuando utilizas la orden especial: “Gertrudis, guardar en memoria de largo plazo...”. También puedes agregarla aquí manualmente.</p>
+ <textarea id="ruleText" placeholder="Ej. Juan vive en España. Las reuniones con él deben ser por la mañana."></textarea>
+ <button id="addRule">Guardar en memoria de largo plazo</button>
+ <div id="rules"></div>
+</section>
+
+<section class="card">
+ <h2>Recordatorios</h2>
+ <p class="muted">La aplicación puede avisarte mientras está abierta. Para avisos fiables cuando esté cerrada necesitaremos añadir notificaciones push en una siguiente etapa.</p>
+ <button class="secondary" id="enableNotifications">Activar notificaciones</button>
+ <span class="muted" id="notificationStatus"></span>
+</section>
+<div class="notice">Tus datos se guardan en este navegador, en este teléfono. Por ahora no se sincronizan con otros dispositivos. No borres los datos del sitio si quieres conservarlos. Evita guardar números completos de cuentas bancarias, contraseñas o PIN.</div>
+</main>
+<footer>Mi Asistente · MVP local · Los datos permanecen en tu dispositivo</footer>
+<script src="app.js"></script>
+</body></html>
