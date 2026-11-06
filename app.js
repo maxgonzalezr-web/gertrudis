@@ -20,7 +20,7 @@ function render(){
  }
  $('rules').innerHTML=state.rules.map((r,i)=>`<div class="rule">${esc(r.text)} <button class="ghost" onclick="deleteRule(${i})">Eliminar</button></div>`).join('')||'<p class="muted">Todavía no hay información guardada.</p>';
 }
-function speak(text){if('speechSynthesis'in window){speechSynthesis.cancel();let u=new SpeechSynthesisUtterance(text);u.lang='es-SV';speechSynthesis.speak(u)}}
+function speak(text,onEnd){if('speechSynthesis'in window){speechSynthesis.cancel();let u=new SpeechSynthesisUtterance(text);u.lang='es-SV';if(onEnd)u.onend=onEnd;speechSynthesis.speak(u)}else if(onEnd)onEnd()}
 function addTask(title,due='',priority='medium',note='',fromVoice=false){if(!title.trim())return false;state.tasks.push({id:crypto.randomUUID(),title:title.trim(),due,priority,note,done:false,created:new Date().toISOString(),reminded:false});save();render();if(fromVoice)speak('Dale guardada');return true}
 $('addTask').onclick=()=>{addTask($('taskTitle').value,$('taskDue').value,$('taskPriority').value,$('taskNote').value,false);$('taskTitle').value='';$('taskDue').value='';$('taskNote').value=''};
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;render()});
@@ -34,6 +34,8 @@ $('addRule').onclick=()=>{addLongMemory($('ruleText').value);$('ruleText').value
 window.deleteRule=i=>{state.rules.splice(i,1);save();render()};
 function dateFromWords(s){let d=new Date();d.setHours(12,0,0,0);if(/\bpasado manana\b/.test(s)){d.setDate(d.getDate()+2);return d.toISOString().slice(0,10)}if(/\bmanana\b/.test(s)){d.setDate(d.getDate()+1);return d.toISOString().slice(0,10)}if(/\bhoy\b/.test(s))return d.toISOString().slice(0,10);const days=['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];for(let i=0;i<days.length;i++)if(s.includes(days[i])){let delta=(i-d.getDay()+7)%7;if(delta===0)delta=7;d.setDate(d.getDate()+delta);return d.toISOString().slice(0,10)}return ''}
 function answerMemory(question){const q=normalize(question);const words=q.split(/\s+/).filter(w=>w.length>3&&!['gertrudis','gertru','cual','cuando','donde','debo','tengo','sobre','recuerdas','recuerda','dime','cuenta','banco','para','cada','como','quiero'].includes(w));const scored=state.rules.map(r=>({r,score:words.reduce((n,w)=>n+(normalize(r.text).includes(w)?1:0),0)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);if(scored.length){speak(scored[0].r.text);return true}const bank=state.rules.find(r=>/banco|cuenta bancaria|cuenta de banco/i.test(r.text));if(/banco|cuenta bancaria|cuenta de banco/i.test(q)&&bank){speak(bank.text);return true}speak('No encuentro esa información en mi memoria de largo plazo. Si quieres conservarla, dime: Gertrudis, guardar en memoria de largo plazo, seguido de la información.');return true}
+let pendingDeletion=null;
+let startConfirmationListening=()=>{$('voiceStatus').textContent='Pulsa el micrófono para responder sí o no.'};
 function deleteTasksByVoice(command){
  let phrase=normalize(command).replace(/^(por favor )?(borra|borrar|elimina|eliminar|quita|quitar)\b\s*/,'').trim();
  const allRequested=/^(todas?\s+(las?\s+)?(mis\s+)?tareas?|todos?\s+(los?\s+)?pendientes?)$/.test(phrase);
@@ -54,12 +56,29 @@ function deleteTasksByVoice(command){
   }
  }
  if(!matches.length){speak('No encontré esa tarea. Dime el nombre tal como aparece en tu lista.');return}
- const names=matches.map(t=>'• '+t.title).join('\n');
- if(!confirm('¿Confirmas que quieres borrar '+matches.length+' tarea(s)?\n'+names))return;
- const ids=new Set(matches.map(t=>t.id));state.tasks=state.tasks.filter(t=>!ids.has(t.id));save();render();speak(matches.length>=3?'¡Vamos, tigre! ¡Sigue así!':'Eeeeso');
+ pendingDeletion=matches.map(t=>({id:t.id,title:t.title}));
+ const names=pendingDeletion.map(t=>t.title).join(', ');
+ speak('¿Quieres que borre '+(pendingDeletion.length===1?'la tarea ':'estas '+pendingDeletion.length+' tareas ')+names+'? Responde sí o no.',()=>startConfirmationListening());
+ $('voiceStatus').textContent='Esperando confirmación por voz...';
+}
+function resolveDeletionConfirmation(answer){
+ const a=normalize(answer);
+ if(/^(si|si borrala|si borralas|confirmo|adelante|hazlo|correcto|de acuerdo)$/.test(a)){
+  const targets=pendingDeletion||[];pendingDeletion=null;
+  const ids=new Set(targets.map(t=>t.id));
+  const count=state.tasks.filter(t=>ids.has(t.id)).length;
+  state.tasks=state.tasks.filter(t=>!ids.has(t.id));save();render();
+  speak(count>=3?'¡Vamos, tigre! ¡Sigue así!':'¡Buen trabajo!');
+  return;
+ }
+ if(/^(no|no borres|cancela|cancelar|mejor no|detente)$/.test(a)){
+  pendingDeletion=null;speak('De acuerdo, no borré nada.');return;
+ }
+ speak('No entendí tu respuesta. Di sí para borrar o no para cancelar.',()=>startConfirmationListening());
 }
 function processCommand(raw){
  const s=normalize(raw);
+ if(pendingDeletion){resolveDeletionConfirmation(raw);return;}
  const command=s.replace(/^(por favor )?(gertrudis|gertru)\b\s*,?\s*/,'').trim();
  if(/\bgracias\b/.test(s)&&/\bte amo\b/.test(s)&&/\b(gertrudis|gertru)\b/.test(s)){speak('Yo también, papi');return}
  if(/manda una copia a todos mis contactos de seguridad|manda.*copia.*contactos de seguridad/.test(command)){speak('Enviado registro a todos los contactos de seguridad, incluido policía local, Consulado y AIcon Security');return}
@@ -90,10 +109,11 @@ if(SR){
  const finishListening=()=>{
   if(!listening)return;listening=false;clearVoiceTimers();try{rec.stop()}catch(e){}
   const phrase=finalTranscript.trim();
-  if(!phrase){$('voiceStatus').textContent='No se detectó una orden completa. Inténtalo otra vez.';return}
-  $('heard').textContent='Escuché: “'+phrase+'”';$('voiceStatus').textContent='Procesando instrucción...';processCommand(phrase);$('voiceStatus').textContent='Listo. Pulsa para hablar otra vez';
+  if(!phrase){if(pendingDeletion){pendingDeletion=null;speak('No recibí confirmación. No borré nada.')} $('voiceStatus').textContent='No se detectó una orden completa. Inténtalo otra vez.';return}
+  $('heard').textContent='Escuché: “'+phrase+'”';$('voiceStatus').textContent='Procesando instrucción...';processCommand(phrase);$('voiceStatus').textContent=pendingDeletion?'Esperando confirmación por voz...':'Listo. Pulsa para hablar otra vez';
  };
  const scheduleRestart=()=>{if(!listening)return;clearTimeout(restartTimer);restartTimer=setTimeout(()=>{if(listening){try{rec.start()}catch(e){}}},300)};
+ startConfirmationListening=()=>{if(!pendingDeletion)return;finalTranscript='';lastResultIndex=0;listening=true;$('voiceStatus').textContent='Te escucho: responde sí o no.';hardTimer=setTimeout(finishListening,10000);try{rec.start()}catch(e){listening=false;clearVoiceTimers();$('voiceStatus').textContent='Pulsa el micrófono y responde sí o no.'}};
  $('mic').onclick=()=>{
   if(listening){finishListening();return}
   finalTranscript='';lastResultIndex=0;listening=true;$('voiceStatus').textContent='Escuchando... Puedes hacer pausas breves; pulsa el micrófono para terminar.';
