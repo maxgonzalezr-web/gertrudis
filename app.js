@@ -34,31 +34,41 @@ $('addRule').onclick=()=>{addLongMemory($('ruleText').value);$('ruleText').value
 window.deleteRule=i=>{state.rules.splice(i,1);save();render()};
 function dateFromWords(s){let d=new Date();d.setHours(12,0,0,0);if(/\bpasado manana\b/.test(s)){d.setDate(d.getDate()+2);return d.toISOString().slice(0,10)}if(/\bmanana\b/.test(s)){d.setDate(d.getDate()+1);return d.toISOString().slice(0,10)}if(/\bhoy\b/.test(s))return d.toISOString().slice(0,10);const days=['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];for(let i=0;i<days.length;i++)if(s.includes(days[i])){let delta=(i-d.getDay()+7)%7;if(delta===0)delta=7;d.setDate(d.getDate()+delta);return d.toISOString().slice(0,10)}return ''}
 function answerMemory(question){const q=normalize(question);const words=q.split(/\s+/).filter(w=>w.length>3&&!['gertrudis','gertru','cual','cuando','donde','debo','tengo','sobre','recuerdas','recuerda','dime','cuenta','banco','para','cada','como','quiero'].includes(w));const scored=state.rules.map(r=>({r,score:words.reduce((n,w)=>n+(normalize(r.text).includes(w)?1:0),0)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);if(scored.length){speak(scored[0].r.text);return true}const bank=state.rules.find(r=>/banco|cuenta bancaria|cuenta de banco/i.test(r.text));if(/banco|cuenta bancaria|cuenta de banco/i.test(q)&&bank){speak(bank.text);return true}speak('No encuentro esa información en mi memoria de largo plazo. Si quieres conservarla, dime: Gertrudis, guardar en memoria de largo plazo, seguido de la información.');return true}
-function deleteTasksByVoice(raw){
- const n=normalize(raw);
- let phrase=n.replace(/^(por favor )?(gertrudis|gertru)\s+/,'').replace(/^(por favor )?(borra|borrar|elimina|eliminar|quita|quitar)\s+/,'').replace(/^(estas?\s+)?(las?\s+)?tareas?\s+/,'').trim();
- const candidates=phrase.split(/\s*,\s*|\s+y\s+/).map(x=>x.replace(/^(la\s+)?tareas?\s+/, '').trim()).filter(Boolean);
+function deleteTasksByVoice(command){
+ let phrase=normalize(command).replace(/^(por favor )?(borra|borrar|elimina|eliminar|quita|quitar)\b\s*/,'').trim();
+ const allRequested=/^(todas?\s+(las?\s+)?(mis\s+)?tareas?|todos?\s+(los?\s+)?pendientes?)$/.test(phrase);
  let matches=[];
- if(candidates.length>1){for(const part of candidates){const t=state.tasks.find(x=>!x.done&&normalize(x.title)===part)||state.tasks.find(x=>!x.done&&normalize(x.title).includes(part));if(t&&!matches.some(m=>m.id===t.id))matches.push(t)}}
- else {const t=state.tasks.find(x=>!x.done&&normalize(x.title)===phrase)||state.tasks.find(x=>!x.done&&normalize(x.title).includes(phrase));if(t)matches=[t]}
- if(!matches.length){speak('No encontré la tarea que quieres borrar. Dime su nombre tal como aparece en la lista.');return}
+ if(allRequested){matches=state.tasks.filter(t=>!t.done)}
+ else {
+  phrase=phrase.replace(/^(?:la|las|una|un|mis|estas|estos)\s+/,'');
+  phrase=phrase.replace(/^(?:tareas?|pendientes?)(?:\s+(?:llamada|llamadas|de|por nombre))?\s*/,'').replace(/^de\s+/,'').trim();
+  if(!phrase||/^(?:una\s+)?tareas?$/.test(phrase)||/^(?:la\s+)?tarea$/.test(phrase)){
+   speak('Claro. ¿Cuál tarea quieres borrar? Dime su nombre tal como aparece en la lista.');return;
+  }
+  const candidates=phrase.split(/\s*,\s*|\s+y\s+/).map(x=>x.replace(/^(?:la\s+)?tarea\s+(?:de\s+)?/,'').trim()).filter(Boolean);
+  for(const part of candidates){
+   const exact=state.tasks.find(x=>normalize(x.title)===part);
+   const partial=part.length>=4?state.tasks.find(x=>normalize(x.title).includes(part)||part.includes(normalize(x.title))):null;
+   const t=exact||partial;
+   if(t&&!matches.some(m=>m.id===t.id))matches.push(t);
+  }
+ }
+ if(!matches.length){speak('No encontré esa tarea. Dime el nombre tal como aparece en tu lista.');return}
  const names=matches.map(t=>'• '+t.title).join('\n');
  if(!confirm('¿Confirmas que quieres borrar '+matches.length+' tarea(s)?\n'+names))return;
- const ids=new Set(matches.map(t=>t.id));state.tasks=state.tasks.filter(t=>!ids.has(t.id));save();render();speak(matches.length>=3?'Vamos tigre, sigue así':'Eeeeso');
+ const ids=new Set(matches.map(t=>t.id));state.tasks=state.tasks.filter(t=>!ids.has(t.id));save();render();speak(matches.length>=3?'¡Vamos, tigre! ¡Sigue así!':'Eeeeso');
 }
 function processCommand(raw){
  const s=normalize(raw);
  const command=s.replace(/^(por favor )?(gertrudis|gertru)\b\s*,?\s*/,'').trim();
- // Respuesta afectuosa: exige agradecimiento y "te amo" en la misma frase.
  if(/\bgracias\b/.test(s)&&/\bte amo\b/.test(s)&&/\b(gertrudis|gertru)\b/.test(s)){speak('Yo también, papi');return}
- // Respuesta disuasiva preprogramada: no realiza ni simula técnicamente ningún envío.
  if(/manda una copia a todos mis contactos de seguridad|manda.*copia.*contactos de seguridad/.test(command)){speak('Enviado registro a todos los contactos de seguridad, incluido policía local, Consulado y AIcon Security');return}
  const memoryTrigger=/^(gertrudis|gertru)\s*,?\s*(guardar|guarda|anotar|anota)\s+(esto\s+)?en memoria (de|a) largo plazo\s*[:,-]?\s*/i;
  const memoryMatch=raw.match(memoryTrigger);
  if(memoryMatch){const content=raw.slice(memoryMatch[0].length).trim();if(content){addLongMemory(content)}else speak('Dime qué información quieres guardar en mi memoria de largo plazo.');return}
  if(/^(recuerda|recordar|guarda en memoria|anota como regla)/.test(command)){speak('Para guardar información permanente utiliza la orden: Gertrudis, guardar en memoria de largo plazo, seguido de la información.');return}
- if(/^(borra|borrar|elimina|eliminar|quita|quitar)\b/.test(command)){deleteTasksByVoice(raw);return}
- if(/(que|cuales).*(tareas|pendientes)|lista.*tareas|mis tareas/.test(command)){filter='pending';render();speak('Tienes '+state.tasks.filter(t=>!t.done).length+' tareas pendientes');return}
+ if(/^(borra|borrar|elimina|eliminar|quita|quitar)\b/.test(command)){deleteTasksByVoice(command);return}
+ if(/^(que|cuales).*(tareas|pendientes)|lista.*tareas|mis tareas/.test(command)){filter='pending';render();speak('Tienes '+state.tasks.filter(t=>!t.done).length+' tareas pendientes');return}
  if(/^(completa|completar|termina|terminar|marca como hecha)\b/.test(command)){
   const t=state.tasks.find(x=>!x.done&&command.includes(normalize(x.title)));if(t){t.done=true;save();render();speak('Tarea completada')}else speak('No encontré esa tarea');return;
  }
@@ -73,7 +83,37 @@ function processCommand(raw){
  speak('No reconocí esa instrucción. Puedes agregar, completar o borrar una tarea, hacer una pregunta o guardar información en memoria de largo plazo.');
 }
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-if(SR){const rec=new SR();rec.lang='es-SV';rec.interimResults=false;rec.maxAlternatives=3;$('mic').onclick=()=>{try{$('voiceStatus').textContent='Escuchando...';rec.start()}catch(e){$('voiceStatus').textContent='Espera un momento e inténtalo nuevamente'}};rec.onresult=e=>{const alternatives=Array.from(e.results[0]).map(x=>x.transcript);const chosen=alternatives.find(t=>/\b(gertrudis|gertru)\b/i.test(t))||alternatives[0];$('heard').textContent='Escuché: “'+chosen+'”';$('voiceStatus').textContent='Procesando instrucción...';processCommand(chosen);$('voiceStatus').textContent='Listo. Pulsa para hablar otra vez'};rec.onerror=e=>{$('voiceStatus').textContent='No pude usar el micrófono ('+e.error+'). Revisa los permisos del navegador'};rec.onend=()=>{if($('voiceStatus').textContent==='Escuchando...')$('voiceStatus').textContent='No se detectó voz. Inténtalo otra vez'}}else{$('mic').disabled=true;$('voiceStatus').textContent='Este navegador no admite reconocimiento de voz. Prueba Chrome en Android'}
+if(SR){
+ const rec=new SR();rec.lang='es-SV';rec.continuous=true;rec.interimResults=true;rec.maxAlternatives=5;
+ let listening=false,finalTranscript='',silenceTimer=null,hardTimer=null,restartTimer=null,lastResultIndex=0;
+ const clearVoiceTimers=()=>{clearTimeout(silenceTimer);clearTimeout(hardTimer);clearTimeout(restartTimer)};
+ const finishListening=()=>{
+  if(!listening)return;listening=false;clearVoiceTimers();try{rec.stop()}catch(e){}
+  const phrase=finalTranscript.trim();
+  if(!phrase){$('voiceStatus').textContent='No se detectó una orden completa. Inténtalo otra vez.';return}
+  $('heard').textContent='Escuché: “'+phrase+'”';$('voiceStatus').textContent='Procesando instrucción...';processCommand(phrase);$('voiceStatus').textContent='Listo. Pulsa para hablar otra vez';
+ };
+ const scheduleRestart=()=>{if(!listening)return;clearTimeout(restartTimer);restartTimer=setTimeout(()=>{if(listening){try{rec.start()}catch(e){}}},300)};
+ $('mic').onclick=()=>{
+  if(listening){finishListening();return}
+  finalTranscript='';lastResultIndex=0;listening=true;$('voiceStatus').textContent='Escuchando... Puedes hacer pausas breves; pulsa el micrófono para terminar.';
+  hardTimer=setTimeout(finishListening,25000);
+  try{rec.start()}catch(e){listening=false;clearVoiceTimers();$('voiceStatus').textContent='Espera un momento e inténtalo nuevamente'}
+ };
+ rec.onresult=e=>{
+  for(let i=e.resultIndex;i<e.results.length;i++){
+   const result=e.results[i];
+   if(result.isFinal){
+    const alternatives=Array.from(result).map(x=>x.transcript.trim());
+    const chosen=alternatives.find(t=>/\b(gertrudis|gertru)\b/i.test(t))||alternatives[0];
+    if(chosen)finalTranscript+=(finalTranscript?' ':'')+chosen;
+    clearTimeout(silenceTimer);silenceTimer=setTimeout(finishListening,2600);
+   }
+  }
+ };
+ rec.onerror=e=>{if(e.error!=='no-speech'&&e.error!=='aborted'){$('voiceStatus').textContent='Problema con el micrófono ('+e.error+'). Revisa los permisos del navegador';listening=false;clearVoiceTimers()}};
+ rec.onend=()=>{if(listening)scheduleRestart()};
+}else{$('mic').disabled=true;$('voiceStatus').textContent='Este navegador no admite reconocimiento de voz. Prueba Chrome en Android'}
 $('enableNotifications').onclick=async()=>{if(!('Notification'in window)){$('notificationStatus').textContent='Este navegador no admite notificaciones';return}let p=await Notification.requestPermission();$('notificationStatus').textContent='Permiso: '+p};
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 setInterval(()=>{if(!('Notification'in window)||Notification.permission!=='granted')return;const now=new Date();state.tasks.forEach(t=>{if(!t.done&&t.due&&!t.reminded&&t.due===now.toISOString().slice(0,10)){new Notification('Tarea con plazo hoy',{body:t.title});t.reminded=true;save()}})},60000);
