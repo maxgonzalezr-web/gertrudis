@@ -1,17 +1,65 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#8b1e2d"><meta name="description" content="Asistente personal Gertrudis">
-<link rel="manifest" href="./manifest.webmanifest"><title>Gertrudis</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#8b1e2d">
+<meta name="description" content="Asistente personal Gertrudis">
+<link rel="manifest" href="./manifest.webmanifest">
+<title>Gertrudis</title>
 <style>
-:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#20232a;background:#f5f6f8}*{box-sizing:border-box}body{margin:0}.wrap{max-width:900px;margin:auto;padding:18px}.hero{background:#8b1e2d;color:#fff;padding:22px;border-radius:18px}.hero h1{margin:0 0 4px;font-size:28px}.hero p{margin:0;opacity:.9}.microw{display:flex;align-items:center;gap:14px;margin-top:18px}.mic{border:0;border-radius:50%;width:66px;height:66px;background:#d7263d;color:#fff;font-size:27px;cursor:pointer;box-shadow:0 3px 12px #0003}.mic.listening{background:#f59e0b}.status{font-size:14px;line-height:1.4}.heard{font-size:13px;margin-top:10px;opacity:.9;overflow-wrap:anywhere}.panel{background:#fff;border-radius:16px;padding:16px;margin-top:15px;box-shadow:0 2px 10px #1720330c}.panel h2{font-size:18px;margin:0 0 12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field{display:flex;flex-direction:column;gap:5px}.field.full{grid-column:1/-1}label{font-size:13px;color:#555}input,select,textarea{width:100%;padding:11px;border:1px solid #d6d9df;border-radius:9px;font:inherit;background:white}button{font:inherit;border:0;border-radius:9px;padding:10px 13px;cursor:pointer;background:#8b1e2d;color:#fff}.secondary{background:#eceff3;color:#20232a}.danger{background:#a61b2b;color:#fff}.ghost{background:transparent;color:#8b1e2d;padding:6px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}.filters button.active{background:#8b1e2d;color:#fff}.filters button{background:#eceff3;color:#333}.muted{color:#737985;font-size:13px}.task{border-top:1px solid #eceef1;padding:12px 0}.task:first-child{border-top:0}.tasktop{display:flex;justify-content:space-between;gap:10px}.task-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.pill{font-size:11px;padding:3px 8px;border-radius:20px;background:#eee;white-space:nowrap}.high{background:#ffe2e2}.medium{background:#fff0cf}.low{background:#e1f4e7}.rule{padding:9px 0;border-top:1px solid #eee}.rule:first-child{border-top:0}.tablewrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px;border-bottom:1px solid #e8eaee;vertical-align:top}th{background:#f2f3f5}.small{font-size:12px}.notice{background:#fff7df;border:1px solid #f1d99a;border-radius:10px;padding:10px;font-size:13px;margin-top:10px}#confirmPanel{border:2px solid #d69a2d} @media(max-width:560px){.wrap{padding:11px}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.hero{padding:18px}.microw{align-items:center}}
-</style></head><body><main class="wrap">
-<section class="hero"><h1>Gertrudis</h1><p>Tu asistente personal</p><div class="microw"><button id="mic" class="mic" aria-label="Hablar">🎙</button><div class="status"><div id="voiceStatus">Pulsa el micrófono y habla con Gertrudis o Gertru.</div><div id="taskCount" class="small"></div></div></div><div id="heard" class="heard"></div><div class="notice">Puedes hablar con naturalidad. Para terminar antes, vuelve a pulsar el micrófono.</div></section>
-<section id="confirmPanel" class="panel" hidden><h2>Confirmación pendiente</h2><p id="confirmText"></p><div class="row"><button id="confirmYes">Sí, borrar</button><button id="confirmNo" class="secondary">No, cancelar</button></div><p class="muted">También puedes responder por voz: pulsa el micrófono y di «sí» o «no».</p></section>
-<section class="panel"><h2>Nueva tarea</h2><div class="grid"><div class="field full"><label for="taskTitle">Tarea</label><input id="taskTitle" placeholder="¿Qué necesitas hacer?"></div><div class="field"><label for="taskDue">Fecha límite</label><input id="taskDue" type="date"></div><div class="field"><label for="taskPriority">Prioridad</label><select id="taskPriority"><option value="medium">Media</option><option value="high">Alta</option><option value="low">Baja</option></select></div><div class="field full"><label for="taskNote">Comentario (opcional)</label><input id="taskNote" placeholder="Detalle o avance"></div></div><div class="row" style="margin-top:10px"><button id="addTask">Guardar tarea</button><span id="manualStatus" class="muted"></span></div></section>
-<section class="panel"><div class="row" style="justify-content:space-between"><h2>Mis tareas</h2><select id="viewMode" style="width:auto"><option value="flat">Hoja plana</option><option value="cards">Tarjetas</option></select></div><div class="filters"><button data-filter="pending" class="active">Pendientes</button><button data-filter="all">Todas</button><button data-filter="done">Completadas</button></div><div id="tasks"></div></section>
-<section class="panel"><h2>Memoria de largo plazo</h2><p class="muted">Gertrudis solo guarda información permanente cuando se lo ordenas expresamente.</p><div class="field"><label for="ruleText">Información autorizada</label><textarea id="ruleText" rows="2" placeholder="Ej.: Juan vive en España y las reuniones deben ser por la mañana"></textarea></div><button id="addRule" style="margin-top:9px">Guardar en memoria</button><div id="rules" style="margin-top:10px"></div></section>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#20232a;background:#f5f6f8}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:900px;margin:auto;padding:16px}
+.hero{background:#8b1e2d;color:#fff;padding:22px;border-radius:18px}
+.hero h1{margin:0 0 4px;font-size:28px}.hero p{margin:0;opacity:.9}
+.microw{display:flex;align-items:center;gap:14px;margin-top:18px}
+.mic{border:0;border-radius:50%;width:66px;height:66px;background:#d7263d;color:#fff;font-size:27px;cursor:pointer}
+.mic.listening{background:#f59e0b}.status{font-size:14px;line-height:1.4}
+.heard{font-size:13px;margin-top:10px;overflow-wrap:anywhere}
+.panel{background:#fff;border-radius:16px;padding:16px;margin-top:15px;box-shadow:0 2px 10px #1720330c}
+.panel h2{font-size:18px;margin:0 0 12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field{display:flex;flex-direction:column;gap:5px}.field.full{grid-column:1/-1}
+label{font-size:13px;color:#555}input,select,textarea{width:100%;padding:11px;border:1px solid #d6d9df;border-radius:9px;font:inherit;background:#fff}
+button{font:inherit;border:0;border-radius:9px;padding:10px 13px;cursor:pointer;background:#8b1e2d;color:#fff}
+.secondary{background:#eceff3;color:#20232a}.danger{background:#a61b2b;color:#fff}.ghost{background:transparent;color:#8b1e2d;padding:6px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.filters button{background:#eceff3;color:#333}.filters button.active{background:#8b1e2d;color:#fff}
+.muted{color:#737985;font-size:13px}.task{border-top:1px solid #eceef1;padding:12px 0}
+.tasktop{display:flex;justify-content:space-between;gap:10px}.task-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pill{font-size:11px;padding:3px 8px;border-radius:20px;background:#eee;white-space:nowrap}
+.high{background:#ffe2e2}.medium{background:#fff0cf}.low{background:#e1f4e7}
+.rule{padding:9px 0;border-top:1px solid #eee}.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px;border-bottom:1px solid #e8eaee;vertical-align:top}th{background:#f2f3f5}
+.notice{background:#fff7df;border:1px solid #f1d99a;border-radius:10px;padding:10px;font-size:13px;margin-top:10px}
+#confirmPanel{border:2px solid #d69a2d}
+@media(max-width:560px){.wrap{padding:11px}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.hero{padding:18px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<section class="hero">
+<h1>Gertrudis</h1><p>Tu asistente personal</p>
+<div class="microw"><button id="mic" class="mic" aria-label="Hablar">🎙</button>
+<div class="status"><div id="voiceStatus">Pulsa el micrófono y habla con Gertrudis o Gertru.</div><div id="taskCount" class="small"></div></div></div>
+<div id="heard" class="heard"></div>
+<div class="notice">Una instrucción por vez. Pulsa el micrófono, habla y espera a que Gertrudis procese la orden.</div>
+</section>
+<section id="confirmPanel" class="panel" hidden><h2>Confirmación pendiente</h2><p id="confirmText"></p>
+<div class="row"><button id="confirmYes">Sí, borrar</button><button id="confirmNo" class="secondary">No, cancelar</button></div>
+<p class="muted">También puedes pulsar el micrófono y responder «sí» o «no».</p></section>
+<section class="panel"><h2>Nueva tarea</h2><div class="grid">
+<div class="field full"><label for="taskTitle">Tarea</label><input id="taskTitle" placeholder="¿Qué necesitas hacer?"></div>
+<div class="field"><label for="taskDue">Fecha límite</label><input id="taskDue" type="date"></div>
+<div class="field"><label for="taskPriority">Prioridad</label><select id="taskPriority"><option value="medium">Media</option><option value="high">Alta</option><option value="low">Baja</option></select></div>
+<div class="field full"><label for="taskNote">Comentario (opcional)</label><input id="taskNote" placeholder="Detalle o avance"></div>
+</div><div class="row" style="margin-top:10px"><button id="addTask">Guardar tarea</button><span id="manualStatus" class="muted"></span></div></section>
+<section class="panel"><div class="row" style="justify-content:space-between"><h2>Mis tareas</h2><select id="viewMode" style="width:auto"><option value="flat">Hoja plana</option><option value="cards">Tarjetas</option></select></div>
+<div class="filters"><button data-filter="pending" class="active">Pendientes</button><button data-filter="all">Todas</button><button data-filter="done">Completadas</button></div><div id="tasks"></div></section>
+<section class="panel"><h2>Memoria de largo plazo</h2><p class="muted">Gertrudis solo guarda información permanente cuando se lo ordenas expresamente.</p>
+<div class="field"><label for="ruleText">Información autorizada</label><textarea id="ruleText" rows="2" placeholder="Ej.: Juan vive en España y las reuniones deben ser por la mañana"></textarea></div>
+<button id="addRule" style="margin-top:9px">Guardar en memoria</button><div id="rules" style="margin-top:10px"></div></section>
 <section class="panel"><h2>Notificaciones</h2><button id="enableNotifications" class="secondary">Activar notificaciones</button> <span id="notificationStatus" class="muted"></span></section>
-<p class="muted small">Los datos se guardan en este navegador. Esta versión no sincroniza automáticamente entre dispositivos.</p>
-</main><script src="./app.js"></script></body></html>
+<p class="muted small">Los datos se guardan en este navegador. Esta versión no sincroniza automáticamente entre dispositivos ni envía alertas reales.</p>
+</main>
+<script src="./app.js"></script>
+</body></html>
