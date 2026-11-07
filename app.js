@@ -85,22 +85,104 @@ $('viewMode').addEventListener('change',e=>{viewMode=e.target.value;render();});
 $('addRule').addEventListener('click',()=>{const v=$('ruleText').value.trim();if(v){state.rules.push({text:v,created:new Date().toISOString()});save();render();$('ruleText').value='';speak('Información guardada en mi memoria de largo plazo.');}});
 $('confirmYes').addEventListener('click',confirmDelete);$('confirmNo').addEventListener('click',cancelDelete);
 window.Gertrudis={toggle(id){const t=state.tasks.find(x=>x.id===id);if(t){t.done=!t.done;save();render();}},priority(id){const t=state.tasks.find(x=>x.id===id);if(t){t.priority=({high:'medium',medium:'low',low:'high'})[t.priority];save();render();}},note(id){const t=state.tasks.find(x=>x.id===id);if(t){const v=prompt('Comentario o avance:',t.note||'');if(v!==null){t.note=v;save();render();}}},remove(id){const t=state.tasks.find(x=>x.id===id);if(t&&confirm('¿Eliminar «'+t.title+'»?')){state.tasks=state.tasks.filter(x=>x.id!==id);save();render();speak('¡Buen trabajo!');}},forget(i){if(confirm('¿Eliminar esta información de la memoria?')){state.rules.splice(i,1);save();render();}}};
-// Voice: one recognizer session at a time, deduplicated final segments, pauses tolerated, bounded duration.
+// Voice: one-shot recognition. Process exactly one final transcript per tap.
+// Android Chrome may emit cumulative/interim fragments; never concatenate them.
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let recognition=null,listening=false,finalParts=[],interimText='',silenceTimer=null,hardTimer=null,restartTimer=null,lastFinalAt=0,sessionToken=0;
-function clearTimers(){clearTimeout(silenceTimer);clearTimeout(hardTimer);clearTimeout(restartTimer);}
-function appendSegment(segment){const s=String(segment||'').trim();if(!s)return;const prev=finalParts.join(' ').trim();const a=norm(prev),b=norm(s);if(!a){finalParts=[s];return;}if(a===b||a.endsWith(b)||b.startsWith(a))return;const aw=a.split(' '),bw=b.split(' ');let overlap=0;for(let k=Math.min(aw.length,bw.length);k>0;k--){if(aw.slice(-k).join(' ')===bw.slice(0,k).join(' ')){overlap=k;break;}}finalParts.push(overlap?bw.slice(overlap).join(' '):s);}
-function finishVoice(){if(!listening)return;listening=false;const token=sessionToken;clearTimers();try{recognition&&recognition.stop();}catch{}const phrase=finalParts.join(' ').trim();interimText='';$('mic').classList.remove('listening');$('mic').textContent='🎙';if(!phrase){$('voiceStatus').textContent='No alcancé a escuchar una instrucción completa. Inténtalo otra vez.';return;}$('heard').textContent='Escuché: «'+phrase+'»';$('voiceStatus').textContent='Procesando...';processCommand(phrase);if(!pendingDeleteIds)$('voiceStatus').textContent='Listo. Pulsa el micrófono para hablar.';}
-function scheduleSilenceFinish(){clearTimeout(silenceTimer);silenceTimer=setTimeout(()=>{if(listening)finishVoice();},2600);}
-function startRecognition(){if(!listening||!recognition)return;try{recognition.start();}catch(e){/* start may be busy; onend will retry */}}
-if(SR){recognition=new SR();recognition.lang='es-SV';recognition.continuous=true;recognition.interimResults=true;recognition.maxAlternatives=5;
- recognition.onresult=e=>{if(!listening)return;let gotFinal=false;for(let i=e.resultIndex;i<e.results.length;i++){const result=e.results[i];const alts=Array.from(result).map(x=>x.transcript.trim()).filter(Boolean);if(!alts.length)continue;const useful=alts.find(t=>WAKE_RE.test(norm(t))||/^(?:borra|borrar|elimina|eliminar|quita|quitar|suprime|agrega|agregar|añade|crea|completa|termina|si|sí|no)\b/i.test(norm(t)));const chosen=useful||alts[0];if(result.isFinal){appendSegment(chosen);gotFinal=true;}else{interimText=chosen;}}
- if(gotFinal){lastFinalAt=Date.now();scheduleSilenceFinish();}
- };
- recognition.onerror=e=>{if(!listening)return;if(['not-allowed','service-not-allowed','audio-capture'].includes(e.error)){$('voiceStatus').textContent='No puedo acceder al micrófono. Revisa los permisos de Chrome.';listening=false;clearTimers();$('mic').classList.remove('listening');$('mic').textContent='🎙';}else if(e.error==='no-speech'){/* tolerate and continue */}};
- recognition.onend=()=>{if(!listening)return;if(Date.now()-lastFinalAt>2300&&finalParts.length){scheduleSilenceFinish();return;}clearTimeout(restartTimer);restartTimer=setTimeout(()=>{if(listening)startRecognition();},350);};
- $('mic').addEventListener('click',()=>{if(listening){finishVoice();return;}sessionToken++;finalParts=[];interimText='';lastFinalAt=0;listening=true;$('mic').classList.add('listening');$('mic').textContent='■';$('voiceStatus').textContent=pendingDeleteIds?'Escuchando confirmación: di sí o no.':'Escuchando. Habla con naturalidad; puedes hacer pausas.';$('heard').textContent='';hardTimer=setTimeout(finishVoice,22000);startRecognition();});
-}else{$('mic').disabled=true;$('voiceStatus').textContent='Este navegador no admite reconocimiento de voz. Prueba Chrome en Android.';}
+let recognition=null,listening=false,voiceFinished=false,hardTimer=null,voiceGotResult=false;
+function resetVoiceUI(message){
+  listening=false;
+  clearTimeout(hardTimer);
+  $('mic').classList.remove('listening');
+  $('mic').textContent='🎙';
+  if(message)$('voiceStatus').textContent=message;
+}
+function finishVoice(phrase){
+  if(voiceFinished)return;
+  voiceFinished=true;
+  const text=String(phrase||'').trim();
+  resetVoiceUI();
+  if(!text){
+    $('voiceStatus').textContent='No alcancé a escuchar una instrucción completa. Pulsa el micrófono e inténtalo otra vez.';
+    return;
+  }
+  $('heard').textContent='Escuché: «'+text+'»';
+  $('voiceStatus').textContent='Procesando...';
+  processCommand(text);
+  if(!pendingDeleteIds)$('voiceStatus').textContent='Listo. Pulsa el micrófono para hablar.';
+}
+if(SR){
+  recognition=new SR();
+  recognition.lang='es-SV';
+  recognition.continuous=false;
+  recognition.interimResults=false;
+  recognition.maxAlternatives=3;
+  recognition.onresult=e=>{
+    if(!listening||voiceFinished||voiceGotResult)return;
+    let chosen='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const result=e.results[i];
+      if(!result.isFinal||!result.length)continue;
+      const alts=Array.from(result).map(x=>String(x.transcript||'').trim()).filter(Boolean);
+      if(!alts.length)continue;
+      const preferred=alts.find(t=>WAKE_RE.test(norm(t))||
+        /^(?:borra|borrar|elimina|eliminar|quita|quitar|suprime|suprimir|agrega|agregar|añade|anade|crea|crear|completa|completar|termina|terminar|si|sí|no)\b/i.test(norm(t)));
+      chosen=preferred||alts[0];
+      break;
+    }
+    if(chosen){
+      voiceGotResult=true;
+      try{recognition.stop();}catch{}
+      finishVoice(chosen);
+    }
+  };
+  recognition.onerror=e=>{
+    if(!listening||voiceFinished)return;
+    if(['not-allowed','service-not-allowed','audio-capture'].includes(e.error)){
+      resetVoiceUI('No puedo acceder al micrófono. Revisa los permisos de Chrome.');
+    }else if(e.error==='no-speech'){
+      resetVoiceUI('No detecté voz. Pulsa el micrófono e inténtalo otra vez.');
+    }else{
+      resetVoiceUI('Se interrumpió el reconocimiento. Inténtalo nuevamente.');
+    }
+    voiceFinished=true;
+  };
+  recognition.onend=()=>{
+    if(!listening||voiceFinished)return;
+    resetVoiceUI('No recibí una transcripción completa. Pulsa el micrófono e inténtalo otra vez.');
+    voiceFinished=true;
+  };
+  $('mic').addEventListener('click',()=>{
+    if(listening){
+      try{recognition.stop();}catch{}
+      if(!voiceGotResult)resetVoiceUI('Detuve la escucha. No se guardó ninguna orden incompleta.');
+      voiceFinished=true;
+      return;
+    }
+    voiceFinished=false;
+    voiceGotResult=false;
+    listening=true;
+    $('mic').classList.add('listening');
+    $('mic').textContent='■';
+    $('voiceStatus').textContent=pendingDeleteIds
+      ?'Escuchando confirmación: di sí para confirmar o no para cancelar.'
+      :'Escuchando una sola instrucción. Habla con naturalidad.';
+    $('heard').textContent='';
+    hardTimer=setTimeout(()=>{
+      if(!listening||voiceFinished)return;
+      try{recognition.stop();}catch{}
+      resetVoiceUI('Se agotó el tiempo de escucha. Inténtalo otra vez.');
+      voiceFinished=true;
+    },20000);
+    try{recognition.start();}
+    catch(e){
+      resetVoiceUI('No pude iniciar el micrófono. Espera un momento e inténtalo otra vez.');
+      voiceFinished=true;
+    }
+  });
+}else{
+  $('mic').disabled=true;
+  $('voiceStatus').textContent='Este navegador no admite reconocimiento de voz. Prueba Chrome en Android.';
+}
 $('enableNotifications').addEventListener('click',async()=>{if(!('Notification'in window)){$('notificationStatus').textContent='Este navegador no admite notificaciones.';return;}const p=await Notification.requestPermission();$('notificationStatus').textContent='Permiso: '+p;});
 if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}
 setInterval(()=>{if(!('Notification'in window)||Notification.permission!=='granted')return;const now=new Date();const key=dateKey(new Date(now.getFullYear(),now.getMonth(),now.getDate(),12));let changed=false;state.tasks.forEach(t=>{if(!t.done&&t.due&&!t.reminded&&t.due===key){new Notification('Tarea con plazo hoy',{body:t.title});t.reminded=true;changed=true;}});if(changed)save();},60000);
