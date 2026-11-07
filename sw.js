@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gertrudis-v9-single-shot';
+const CACHE_NAME = 'gertrudis-v10-completion-commands';
 const ASSETS = ['./','./index.html','./app.js','./manifest.webmanifest'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));

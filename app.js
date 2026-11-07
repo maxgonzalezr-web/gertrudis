@@ -140,7 +140,7 @@ function cleanWakeWord(text) {
 }
 const CREATE = /^(?:por favor )?(?:agrega|agregar|añade|anade|adiciona|adicionar|crea|crear|registra|registrar|anota|anotar|apunta|apuntar|incluye|incluir|nueva tarea|nueva)\b/;
 const DELETE = /^(?:por favor )?(?:borra|borrar|elimina|eliminar|quita|quitar|suprime|suprimir|remueve|remover)\b/;
-const COMPLETE = /^(?:por favor )?(?:completa|completar|termina|terminar|finaliza|finalizar|marca como hecha|marca como completada)\b/;
+const COMPLETE = /^(?:por favor )?(?:completa|completar|termina|terminar|finaliza|finalizar|marca|marcar|pon|poner|da por finalizada|da por finalizado)\b/;
 
 function stripCreatePrefix(s) {
   return s.replace(CREATE,'').replace(/^(?:una?\s+)?(?:tarea|pendiente)\s*(?:de|para)?\s*/,'').trim();
@@ -220,11 +220,30 @@ function processCommand(raw) {
   if(mem){const content=command.slice(mem[0].length);if(content)addMemory(content);else speak('Dime qué información quieres guardar.');return;}
   if(DELETE.test(command)){deleteByVoice(command);return;}
   if(COMPLETE.test(command)){
-    const target=command.replace(COMPLETE,'').replace(/^(?:la\s+)?tarea\s+(?:de\s+)?/,'').trim();
-    const t=state.tasks.find(x=>!x.done&&normalize(x.title)===target) ||
-      state.tasks.find(x=>!x.done&&normalize(x.title).includes(target));
-    if(t){t.done=true;save();render();speak('Tarea completada');}
-    else speak('No encontré esa tarea.');
+    let target = command
+      .replace(/^(?:por favor )?(?:marca|marcar)\s+/, '')
+      .replace(/\s+como\s+(?:completada|completado|hecha|hecho|terminada|terminado)$/, '')
+      .replace(/^(?:por favor )?(?:pon|poner)\s+/, '')
+      .replace(/\s+como\s+(?:completada|completado|hecha|hecho|terminada|terminado)$/, '')
+      .replace(/^(?:por favor )?(?:da por finalizada|da por finalizado)\s+/, '')
+      .replace(/^(?:por favor )?(?:completa|completar|termina|terminar|finaliza|finalizar)\s+/, '')
+      .replace(/^(?:la\s+)?tarea\s+(?:de\s+)?/, '')
+      .replace(/\s+por favor$/, '').trim();
+    const needle=normalize(target);
+    if(!needle){speak('Dime qué tarea quieres marcar como completada.');return;}
+    const words=needle.split(' ').filter(w=>w.length>2);
+    const ranked=state.tasks.filter(x=>!x.done).map(task=>{
+      const title=normalize(task.title);
+      let score=title===needle?100:title.includes(needle)?85:needle.includes(title)?75:
+        words.filter(w=>title.includes(w)).length;
+      return {task,score};
+    }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+    if(!ranked.length){speak('No encontré esa tarea. Dime el nombre como aparece en tu lista.');return;}
+    const best=ranked[0].score;
+    const matches=ranked.filter(x=>x.score===best);
+    if(matches.length>1){speak('Encontré varias tareas parecidas. Dime el nombre más completo para no marcar la equivocada.');return;}
+    const task=ranked[0].task;
+    task.done=true;save();render();speak('¡Buen trabajo! Tarea marcada como completada.');
     return;
   }
   if(CREATE.test(command)){
